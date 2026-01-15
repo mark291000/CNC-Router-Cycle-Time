@@ -7,7 +7,7 @@ import re
 from tempfile import NamedTemporaryFile
 from datetime import datetime
 
-st.set_page_config(page_title="PDF Extractor Tool", layout="wide")
+st.set_page_config(page_title="CNC Router Cycle Time", layout="wide")
 st.title("CNC Router Cycle Time")
 st.markdown("📌 For any issues related to the app, please contact Mark Dang.")
 
@@ -187,4 +187,5 @@ if uploaded_files:
         )
     else:
         st.error("❌ Không tìm thấy dữ liệu hợp lệ.")
+
 
