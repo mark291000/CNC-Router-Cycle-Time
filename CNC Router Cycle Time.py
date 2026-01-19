@@ -98,13 +98,6 @@ def calculate_part_num(description):
     - Có pattern L[text][SPECIAL_CHAR][text]R[text] → 2
       (SPECIAL_CHAR: /, -, +, &, |, *, #, @, etc. KHÔNG BAO GỒM SPACE và chữ/số)
     - Còn lại → 1
-    
-    Ví dụ pattern L/R hợp lệ:
-    - "L Side / R Side" ✓ (có separator "/")
-    - "L-Panel + R-Panel" ✓ (có separator "+")
-    - "L End & R End" ✓ (có separator "&")
-    - "Leg Rail" ✗ (không có special char separator)
-    - "L Side R Side" ✗ (chỉ có space, không có special char)
     """
     if pd.isna(description):
         return 1
@@ -158,10 +151,6 @@ if uploaded_files:
             program_df = combined_df[combined_df["Program"] == program]
             
             # SUM cột Part Num để tính Different Parts
-            # Logic:
-            # - RELIEF parts: Part Num = 0
-            # - L/R pattern parts (với ký tự đặc biệt, không tính space): Part Num = 2
-            # - Regular parts: Part Num = 1
             different_parts = program_df["Part Num"].sum()
             
             # Tổng số parts (Qty Nested)
@@ -188,15 +177,6 @@ if uploaded_files:
         result_df = pd.DataFrame(result_data)
         
         st.success("✅ Hoàn tất xử lý!")
-        
-        # Hiển thị thông tin về logic đếm
-        st.info(
-            "ℹ️ **Counting rules:**\n"
-            "- RELIEF parts = 0\n"
-            "- L/R pattern parts (with special char separator, NOT space) = 2\n"
-            "- Regular parts = 1"
-        )
-        
         st.dataframe(result_df, use_container_width=True)
 
         # Export file Excel
