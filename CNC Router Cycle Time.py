@@ -91,24 +91,39 @@ def extract_data_from_pdf(file_bytes, filename):
 
     return pd.concat(all_tables, ignore_index=True) if all_tables else pd.DataFrame()
 
-def count_parts_with_lr_pattern(description):
+def calculate_part_num(description):
     """
-    Kiểm tra nếu Part Description có dạng L** + dấu phân cách + R**
-    Ví dụ: "LAF-RAF Back Post", "LFT/RFT", "LSIDE-RSIDE"
-    Trả về 2 nếu khớp pattern, 1 nếu không khớp
+    Tính Part Num dựa trên Part Description:
+    - Chứa "RELIEF" → 0
+    - Có pattern L[text][SPECIAL_CHAR][text]R[text] → 2
+      (SPECIAL_CHAR: /, -, +, &, |, *, #, @, etc. KHÔNG BAO GỒM SPACE và chữ/số)
+    - Còn lại → 1
+    
+    Ví dụ pattern L/R hợp lệ:
+    - "L Side / R Side" ✓ (có separator "/")
+    - "L-Panel + R-Panel" ✓ (có separator "+")
+    - "L End & R End" ✓ (có separator "&")
+    - "Leg Rail" ✗ (không có special char separator)
+    - "L Side R Side" ✗ (chỉ có space, không có special char)
     """
     if pd.isna(description):
         return 1
     
     desc_str = str(description).strip()
     
-    # Pattern: L + ít nhất 1 ký tự + dấu phân cách + R + ít nhất 1 ký tự
-    # Không yêu cầu kết thúc bằng R, cho phép có text phía sau
-    # \W = ký tự không phải chữ/số (dấu phân cách như -, /, \, |, etc.)
-    pattern = r'L\w+[\W_]+R\w+'
+    # Kiểm tra RELIEF
+    if re.search(r'RELIEF', desc_str, re.IGNORECASE):
+        return 0
+    
+    # Pattern: L + chữ/số + KÝ TỰ ĐẶC BIỆT (không phải space, chữ, số) + bất kỳ gì + R + chữ/số
+    # [^\w\s] = không phải word character (chữ/số/_) và không phải space
+    # Nghĩa là chỉ ký tự đặc biệt như /, -, +, &, |, *, #, @, etc.
+    pattern = r'L[a-zA-Z0-9]+[^\w\s]+.*?R[a-zA-Z0-9]+'
     
     if re.search(pattern, desc_str, re.IGNORECASE):
         return 2
+    
+    # Còn lại
     return 1
 
 uploaded_files = st.file_uploader("📂 Kéo và thả file PDF vào đây", type=["pdf"], accept_multiple_files=True)
@@ -133,23 +148,23 @@ if uploaded_files:
         for col in ["Qty Req", "Qty Nested", "Sheet", "Kit"]:
             combined_df[col] = pd.to_numeric(combined_df[col], errors="coerce").fillna(0)
 
+        # Tạo cột Part Num dựa trên Part Description
+        combined_df["Part Num"] = combined_df["Part Description"].apply(calculate_part_num)
+
         # Tạo bảng kết quả tổng hợp
         result_data = []
         
         for program in combined_df["Program"].unique():
             program_df = combined_df[combined_df["Program"] == program]
             
-            # Lọc ra những Part không có Description chứa "RELIEF"
-            filtered_df = program_df[
-                ~program_df["Part Description"].astype(str).str.contains("RELIEF", case=False, na=False)
-            ]
+            # SUM cột Part Num để tính Different Parts
+            # Logic:
+            # - RELIEF parts: Part Num = 0
+            # - L/R pattern parts (với ký tự đặc biệt, không tính space): Part Num = 2
+            # - Regular parts: Part Num = 1
+            different_parts = program_df["Part Num"].sum()
             
-            # Đếm Different Parts với logic:
-            # - Nếu Description có dạng L** + dấu phân cách + R**: đếm là 2
-            # - Nếu không: đếm là 1
-            different_parts = filtered_df["Part Description"].apply(count_parts_with_lr_pattern).sum()
-            
-            # Tổng số parts
+            # Tổng số parts (Qty Nested)
             total_parts = program_df["Qty Nested"].sum()
             
             # Lấy giá trị Kit và PageCount
@@ -173,6 +188,15 @@ if uploaded_files:
         result_df = pd.DataFrame(result_data)
         
         st.success("✅ Hoàn tất xử lý!")
+        
+        # Hiển thị thông tin về logic đếm
+        st.info(
+            "ℹ️ **Counting rules:**\n"
+            "- RELIEF parts = 0\n"
+            "- L/R pattern parts (with special char separator, NOT space) = 2\n"
+            "- Regular parts = 1"
+        )
+        
         st.dataframe(result_df, use_container_width=True)
 
         # Export file Excel
@@ -187,5 +211,3 @@ if uploaded_files:
         )
     else:
         st.error("❌ Không tìm thấy dữ liệu hợp lệ.")
-
-
